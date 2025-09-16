@@ -1,0 +1,1 @@
+INSERT INTO recipes (name, ingredients) VALUES ('Plato Súper Completo', '{"meat": 5, "chicken": 5, "rice": 5, "potato": 5, "tomato": 5, "onion": 5, "cheese": 5, "lettuce": 5, "lemon": 5, "ketchup": 5}');

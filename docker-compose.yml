@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: restaurant_db
+      POSTGRES_USER: restaurant_user
+      POSTGRES_PASSWORD: restaurant_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U restaurant_user -d restaurant_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: restaurant_user
+      RABBITMQ_DEFAULT_PASS: restaurant_pass
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kitchen-service:
+    build:
+      context: ./kitchen-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://restaurant_user:restaurant_pass@postgres:5432/restaurant_db
+      RABBITMQ_URL: amqp://restaurant_user:restaurant_pass@rabbitmq:5672
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  pantry-service:
+    build:
+      context: ./pantry-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://restaurant_user:restaurant_pass@postgres:5432/restaurant_db
+      RABBITMQ_URL: amqp://restaurant_user:restaurant_pass@rabbitmq:5672
+      PORT: 4100
+    ports:
+      - "4100:4100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      VITE_KITCHEN_API_URL: http://localhost:4000
+      VITE_PANTRY_API_URL: http://localhost:4100
+    ports:
+      - "3000:3000"
+    depends_on:
+      - kitchen-service
+      - pantry-service
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: restaurant_network
